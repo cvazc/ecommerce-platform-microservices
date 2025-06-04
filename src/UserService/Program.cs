@@ -3,7 +3,10 @@ using UserService.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+// 1. Registrar servicios para controladores
+builder.Services.AddControllers();
+
+// 2. Configurar Entity Framework Core
 builder.Services.AddDbContext<UserDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
@@ -11,13 +14,7 @@ builder.Services.AddDbContext<UserDbContext>(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
-
-app.UseHttpsRedirection();
-
+app.UseHttpsRedirection(); // Puedes mantener esto comentado por ahora si sigues teniendo problemas con el puerto HTTPS
+app.UseAuthorization();
+app.MapControllers();
 app.Run();
-
