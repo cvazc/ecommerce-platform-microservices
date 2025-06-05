@@ -25,13 +25,13 @@ namespace UserService.Controllers
                 return BadRequest("Username or Email already exists.");
             }
 
-            var passwordHashPlaceholder = userRegisterDto.Password + "_hashed";
+            string hashedPassword = BCrypt.Net.BCrypt.HashPassword(userRegisterDto.Password);
 
             var user = new User
             {
                 Username = userRegisterDto.Username,
                 Email = userRegisterDto.Email,
-                PasswordHash = passwordHashPlaceholder,
+                PasswordHash = hashedPassword,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -59,8 +59,8 @@ namespace UserService.Controllers
                 return Unauthorized("Invalid username or password.");
             }
 
-            var DUMMY_isPasswordValid = (user.PasswordHash == userLoginDto.Password + "_hashed");
-            if (!DUMMY_isPasswordValid)
+            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(userLoginDto.Password, user.PasswordHash);
+            if (!isPasswordValid)
             {
                 return Unauthorized("Invalid username or password.");
             }
