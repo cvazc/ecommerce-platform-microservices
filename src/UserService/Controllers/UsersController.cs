@@ -1,5 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using UserService.Data;
 using UserService.Dtos;
 using UserService.Models;
@@ -11,10 +16,12 @@ namespace UserService.Controllers
     public class UsersController : ControllerBase
     {
         private readonly UserDbContext _context;
+        private readonly IConfiguration _configuration;
 
-        public UsersController(UserDbContext context)
+        public UsersController(UserDbContext context, IConfiguration configuration)
         {
             _context = context;
+            _configuration = configuration;
         }
 
         [HttpPost("register")]
@@ -54,29 +61,36 @@ namespace UserService.Controllers
         {
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == userLoginDto.Username);
 
-            if (user == null)
+            if (user == null || !BCrypt.Net.BCrypt.Verify(userLoginDto.Password, user.PasswordHash))
             {
-                return Unauthorized("Invalid username or password.");
+                return Unauthorized("Invalid credentials.");
             }
 
-            bool isPasswordValid = BCrypt.Net.BCrypt.Verify(userLoginDto.Password, user.PasswordHash);
-            if (!isPasswordValid)
-            {
-                return Unauthorized("Invalid username or password.");
-            }
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_configuration["Jwt:Key"]);
 
-            var userDto = new UserDto
+            var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Id = user.Id,
-                Username = user.Username,
-                Email = user.Email,
-                CreatedAt = user.CreatedAt
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                    new Claim(JwtRegisteredClaimNames.Name, user.Username),
+                    new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                }),
+                Expires = DateTime.UtcNow.AddHours(1),
+                Issuer = _configuration["Jwt:Issuer"],
+                Audience = _configuration["Jwt:Audience"],
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 
-            return Ok(new { message = "Login successful", user = userDto });
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            var tokenString = tokenHandler.WriteToken(token);
+
+            return Ok(new { Token = tokenString });
         }
 
         [HttpGet("{id}")]
+        [Authorize]
         public async Task<IActionResult> GetUserById(int id)
         {
             var user = await _context.Users.FindAsync(id);
